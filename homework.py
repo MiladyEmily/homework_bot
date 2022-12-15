@@ -142,7 +142,7 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """Проверяет статус и формирует текст сообщения"""
+    """Проверяет статус и формирует текст сообщения."""
     homework_keys = ['status',
                      'homework_name']
     for item in homework_keys:
