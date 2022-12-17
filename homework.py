@@ -122,6 +122,7 @@ def parse_status(homework: dict) -> str:
 
 
 def check_in_process(bot: telegram.bot.Bot) -> bool:
+    """Проверяет, не является ли этот проект последним в курсе"""
     response = get_api_answer(0)
     if len(response['homeworks']) == HOMEWORKS_NUMBER:
         send_message(bot, '🎉🥂Поздравляю! Ты завершил курс!😍🎊')
