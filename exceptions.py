@@ -4,3 +4,7 @@ class NoEnvVariable(Exception):
 
 class StatusNot200(Exception):
     pass
+
+
+class TelegramNotAvailable(Exception):
+    pass

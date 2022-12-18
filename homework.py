@@ -8,19 +8,11 @@ from typing import Any, List, Union
 import telegram
 import requests
 
-from exceptions import NoEnvVariable, StatusNot200
-from settings import (RETRY_PERIOD, ENDPOINT, PRACTICUM_TOKEN,
-                      TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, HEADERS,
-                      HOMEWORKS_NUMBER)
-
-
-HOMEWORK_VERDICTS = {
-    'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
-    'reviewing': 'Работа взята на проверку ревьюером.',
-    'rejected': 'Работа проверена: у ревьюера есть замечания.'
-}
-HOMEWORK_KEYS = ['status',
-                 'homework_name']
+from exceptions import NoEnvVariable, StatusNot200, TelegramNotAvailable
+from settings import (
+    RETRY_PERIOD, ENDPOINT, PRACTICUM_TOKEN, TELEGRAM_TOKEN, HOMEWORK_KEYS,
+    TELEGRAM_CHAT_ID, HEADERS, HOMEWORKS_NUMBER, HOMEWORK_VERDICTS
+)
 
 
 logger = logging.getLogger(__name__)
@@ -71,11 +63,17 @@ def send_message(bot: telegram.bot.Bot, message: str) -> Union[bool, None]:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(f'Отправлено сообщение: {message}')
         return True
-    except Exception as error:
+    except telegram.error.NetworkError as error:
+        logging.error(f'Не смог отправить сообщение {message} в чат. '
+                      f'Телеграм недоступен: {error}')
+        raise TelegramNotAvailable('Телеграм недоступен')
+    except telegram.error.TelegramError as error:
         logging.error(f'Не смог отправить сообщение {message} в чат: {error}')
+    except Exception as error:
+        logging.error(f'Не смог отправить сообщение: {error}')
 
 
-def get_api_answer(timestamp: float) -> Union[None, dict]:
+def get_api_answer(timestamp: int) -> Union[None, dict]:
     """Получает ответ от API Яндекс.Домашки."""
     try:
         payload = {'from_date': timestamp}
@@ -93,11 +91,7 @@ def get_api_answer(timestamp: float) -> Union[None, dict]:
 def check_response(response: dict) -> Union[dict, None]:
     """Проверяет ответ на соответствие документации."""
     type_check('объект ответа - не словарь', response, dict)
-    value_check('current_date', response.keys())
     value_check('homeworks', response.keys())
-    type_check('current_date - не целое число',
-               response['current_date'],
-               int)
     type_check('homeworks - не список', response['homeworks'], list)
     if not response['homeworks']:
         logging.debug('Обновлений нет')
@@ -125,7 +119,8 @@ def check_in_process(bot: telegram.bot.Bot) -> bool:
     """Проверяет, не является ли этот проект последним в курсе."""
     response = get_api_answer(0)
     if len(response['homeworks']) == HOMEWORKS_NUMBER:
-        send_message(bot, '🎉🥂Поздравляю! Ты завершил курс!😍🎊')
+        send_message(bot, ('🎉🥂Поздравляю! Ты сделал всё домашки!😍🎊 '
+                           'Удачи с дипломом'))
         return False
     return True
 
@@ -149,7 +144,7 @@ def main() -> None:
                 last_message[0] = message
                 if homework['status'] == 'approved':
                     bot_working = check_in_process(bot)
-            timestamp = response['current_date']
+            timestamp = response.get('current_date', timestamp)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             if send_message(bot, message):
@@ -165,8 +160,8 @@ if __name__ == '__main__':
         filemode='w',
         format='%(asctime)s %(levelname)s: %(message)s'
     )
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
     try:
         main()
     except KeyboardInterrupt:
-        bot = telegram.Bot(token=TELEGRAM_TOKEN)
         send_message(bot, 'Я выключаюсь. Но скоро снова буду с тобой!')
